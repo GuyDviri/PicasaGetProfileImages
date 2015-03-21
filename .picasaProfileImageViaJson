@@ -1,0 +1,328 @@
+package com.gracetech.glimps;
+
+
+import java.io.IOException;
+
+
+import android.os.AsyncTask;
+
+
+import com.gracetech.wedates.callbacks.WDPicasaCallBacks;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.utils.URLEncodedUtils;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.util.EntityUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class PicasaImagesHelper implements WDPicasaCallBacks {
+
+
+    //https://picasaweb.google.com/data/feed/api/user/103316116977988458724/?alt=jsonc//
+
+    String userID = "103316116977988458724";
+    String jsonFun = "?alt=jsonc";
+    ArrayList<String> urls = new ArrayList<>();
+
+
+    protected final String defaultUrl = "https://picasaweb.google.com/data/feed/api/user/";
+
+
+    static InputStream is = null;
+    static JSONObject jObj = null;
+    static String json = "";
+
+    static String response = null;
+    public final static int GET = 1;
+    public final static int POST = 2;
+
+    boolean profileAlbumFound = false;
+    WDPicasaCallBacks picasaCallBack = null;
+
+
+    // Picasa JSON response node keys
+
+    private static final
+
+    String
+            TAG_DATA = "data",
+            TAG_ITEMS = "items",
+            TAG_TITLE = "title",
+            TAG_PROFILE = "profile",
+            TAG_MEDIA = "media",
+            TAG_URL = "url",
+            TAG_ALBUMID = "albumid",
+            TAG_IMAGE = "image";
+
+
+    private String url = null;
+
+    PicasaImagesHelper() {
+
+
+        // default params just for testing //
+
+        url = defaultUrl + userID + jsonFun;
+        getJsonStringFromUrlAsync(url, this);
+
+
+    }
+
+
+    PicasaImagesHelper(String userID , WDPicasaCallBacks picasaCallBack) {
+
+
+        this.picasaCallBack = picasaCallBack;
+        this.userID = userID;
+        this.url = defaultUrl + userID + jsonFun;
+
+        getJsonStringFromUrlAsync(url, this);
+
+    }
+
+    public void getJsonStringFromUrlAsync(final String jsonUrl, final PicasaImagesHelper callback) {
+
+        new AsyncTask<Void, Void, String>() {
+
+            @Override
+            protected String doInBackground(Void... params) {
+                String results = null;
+
+                return results = (makeServiceCall(url, GET, null));// getJSONFromUrl();
+
+
+            }
+
+
+            @Override
+            protected void onPostExecute(String jsonObject) {
+                callback.resultFromHtmlToJson(jsonObject);
+            }
+        }.execute();
+
+    }
+
+    public void parserJsonAsyncTogetAlbumId(final JSONObject jObj) {
+
+        new AsyncTask<Void, Void, Void>() {
+
+            @Override
+            protected Void doInBackground(Void... voids) {
+                try {
+                    parserJsonTogetProfileAlbumID();
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+
+                return null;
+
+
+            }
+        }.execute();
+
+    }
+
+    public void parserJsonAsyncTogetAlbumImagesUrls(final JSONObject jObj) {
+
+        new AsyncTask<Void, Void, Void>() {
+
+            @Override
+            protected Void doInBackground(Void... voids) {
+
+                try {
+                    parserJsonTogetProfileImagesUrls();
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+
+                return null;
+
+
+            }
+        }.execute();
+
+    }
+
+
+    public String makeServiceCall(String url, int method,
+                                  List<NameValuePair> params) {
+        try {
+            // http client
+            DefaultHttpClient httpClient = new DefaultHttpClient();
+            HttpEntity httpEntity = null;
+            HttpResponse httpResponse = null;
+
+            // Checking http request method type
+            if (method == POST) {
+                HttpPost httpPost = new HttpPost(url);
+                // adding post params
+                if (params != null) {
+                    httpPost.setEntity(new UrlEncodedFormEntity(params));
+                }
+
+                httpResponse = httpClient.execute(httpPost);
+
+            } else if (method == GET) {
+                // appending params to url
+                if (params != null) {
+                    String paramString = URLEncodedUtils
+                            .format(params, "utf-8");
+                    url += "?" + paramString;
+                }
+                HttpGet httpGet = new HttpGet(url);
+
+                httpResponse = httpClient.execute(httpGet);
+
+            }
+            httpEntity = httpResponse.getEntity();
+            response = EntityUtils.toString(httpEntity);
+
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        } catch (ClientProtocolException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return response;
+
+    }
+
+    private void resultFromHtmlToJson(String jsonString) {
+
+        if (jsonString != null && !profileAlbumFound) {
+
+            try {
+                jObj = new JSONObject(jsonString);
+                parserJsonAsyncTogetAlbumId(jObj);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+
+        } else if (jsonString != null && profileAlbumFound) {
+            // Here we get the Json profile Album String //
+
+            try {
+                jObj = new JSONObject(jsonString);
+                parserJsonTogetProfileImagesUrls();
+
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+         } else
+            Mesg.SimpleMsg("Can't get Json String");
+
+    }
+
+
+    private void albumsResults(ArrayList<String> urls) {
+        int x = 0;
+    }
+
+
+    private void parserJsonTogetProfileAlbumID() throws JSONException {
+
+
+        JSONArray items = jObj.getJSONObject(TAG_DATA).getJSONArray(TAG_ITEMS);
+
+        for (int index = 0; index < items.length(); ) {
+
+            String title = items.getJSONObject(index).getString(TAG_TITLE);
+
+            if (title.toLowerCase().contains(TAG_PROFILE)) {
+                Mesg.L("we fine the profile album now grab the urls ");
+                profileAlbumFound = true;
+
+                String albumID = items.getJSONObject(index).getString("id");
+
+                url = defaultUrl + userID + "/" + TAG_ALBUMID + "/" + albumID + jsonFun;
+                jObj = null;
+                getJsonStringFromUrlAsync(url, this);
+            }
+
+            Mesg.L(" title : " + title.toString() + "/n");
+
+            if (profileAlbumFound != true)
+
+                index++;
+            else break;
+        }
+
+
+    }
+
+    private void parserJsonTogetProfileImagesUrls() throws JSONException {
+
+
+        JSONArray media = jObj.getJSONObject(TAG_DATA).getJSONArray(TAG_ITEMS);
+
+        for (int index = 0; index < media.length(); ) {
+
+
+            JSONObject jsonMedia = media.getJSONObject(index).getJSONObject(TAG_MEDIA);
+
+            JSONObject jsonImage = jsonMedia.getJSONObject(TAG_IMAGE);
+
+
+            String jsonUrl = jsonImage.getString(TAG_URL);
+
+            urls.add(jsonUrl);
+
+
+            Mesg.L(" url : " + jsonUrl.toString() + "/n");
+
+            index++;
+
+        }
+        finishGrabbingAlltheProfilePublicPicasaUserUrls();
+    }
+
+    private void finishGrabbingAlltheProfilePublicPicasaUserUrls() {
+        // send back the urls Array //
+        picasaCallBack.getPicasaImagesUrls ( urls);
+    }
+
+
+    @Override
+    public void getPicasaImagesUrls(ArrayList<String> urls) {
+
+    }
+}
+
+
+**// The Interface to connect with the PicasaClass **//
+
+
+package com.gracetech.glimps.callbacks;
+
+        import java.util.ArrayList;
+
+/**
+ * Created by Administrator on 21-Mar-15.
+ */
+public interface WDPicasaCallBacks {
+
+
+    void getPicasaImagesUrls(ArrayList<String> urls);
+}
+
+
+
+
+
